@@ -181,6 +181,7 @@ class SparkContext(config: SparkConf) extends Logging {
 
   // log out Spark Version in Spark driver log
   logInfo(s"Running Spark version $SPARK_VERSION")
+  logInfo(s"meow  meow context $SPARK_VERSION")
 
   /* ------------------------------------------------------------------------------------- *
    | Private variables. These variables keep the internal state of the context, and are    |

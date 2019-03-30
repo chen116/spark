@@ -18,8 +18,9 @@
 // scalastyle:off println
 package org.apache.spark.examples
 
-import scala.math.random
+import org.apache.spark.{SparkConf, SparkContext}
 
+import scala.math.random
 import org.apache.spark.sql.SparkSession
 
 /** Computes an approximation to pi */
@@ -28,7 +29,14 @@ object SparkPi {
     val spark = SparkSession
       .builder
       .appName("Spark Pi")
+      .master("local")
+      .config("spark.submit.deployMode", "client")
       .getOrCreate()
+
+
+
+
+
     val slices = if (args.length > 0) args(0).toInt else 2
     val n = math.min(100000L * slices, Int.MaxValue).toInt // avoid overflow
     val count = spark.sparkContext.parallelize(1 until n, slices).map { i =>

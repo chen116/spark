@@ -557,6 +557,7 @@ private[spark] class ExecutorAllocationManager(
    * Callback invoked when the specified executor has been removed.
    */
   private def onExecutorRemoved(executorId: String): Unit = synchronized {
+    logInfo(s"meow  meow remove")
     if (executorIds.contains(executorId)) {
       executorIds.remove(executorId)
       removeTimes.remove(executorId)
