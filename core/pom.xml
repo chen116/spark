@@ -37,6 +37,7 @@
       <groupId>com.thoughtworks.paranamer</groupId>
       <artifactId>paranamer</artifactId>
     </dependency>
+
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
@@ -71,6 +72,20 @@
       <artifactId>spark-launcher_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!--<dependency>-->
+      <!--<groupId>org.apache.spark</groupId>-->
+      <!--<artifactId>spark-sql_${scala.binary.version}</artifactId>-->
+      <!--<version>1.0</version>-->
+      <!--<scope>system</scope>-->
+      <!--<systemPath>/home/vic/buspark/spark/sql/core/target/spark-sql_2.11-2.4.1-SNAPSHOT.jar</systemPath>-->
+    <!--</dependency>-->
+    <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-sql -->
+    <!--<dependency>-->
+      <!--<groupId>org.apache.spark</groupId>-->
+      <!--<artifactId>spark-sql_2.11</artifactId>-->
+      <!--<version>2.4.0</version>-->
+    <!--</dependency>-->
+
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-kvstore_${scala.binary.version}</artifactId>
@@ -411,7 +426,6 @@
       <artifactId>libfb303</artifactId>
       <scope>provided</scope>
     </dependency>
-
   </dependencies>
   <build>
     <outputDirectory>target/scala-${scala.binary.version}/classes</outputDirectory>

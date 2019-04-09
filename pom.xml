@@ -290,9 +290,17 @@
       <artifactId>junit-interface</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.qubole</groupId>
+      <artifactId>sparklens</artifactId>
+      <version>1.0</version>
+      <scope>system</scope>
+      <systemPath>/home/vic/hpc/sparklens.jar</systemPath>
+    </dependency>
   </dependencies>
   <dependencyManagement>
     <dependencies>
+
       <dependency>
         <groupId>org.apache.spark</groupId>
         <artifactId>spark-tags_${scala.binary.version}</artifactId>

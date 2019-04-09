@@ -54,6 +54,8 @@ trait Logging {
     if (log.isInfoEnabled) log.info(msg)
   }
 
+
+
   protected def logDebug(msg: => String) {
     if (log.isDebugEnabled) log.debug(msg)
   }

@@ -17,21 +17,26 @@
 
 package org.apache.spark
 
+import java.text.SimpleDateFormat
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.control.{ControlThrowable, NonFatal}
-
 import com.codahale.metrics.{Gauge, MetricRegistry}
-
-import org.apache.spark.internal.{config, Logging}
+import com.qubole.sparklens.{VicJobListener, VicSQLStream, asyncReportingEnabled, dumpDataEnabled}
+import org.apache.spark.internal.{Logging, config}
 import org.apache.spark.internal.config._
 import org.apache.spark.metrics.source.Source
 import org.apache.spark.scheduler._
 import org.apache.spark.storage.BlockManagerMaster
 import org.apache.spark.util.{Clock, SystemClock, ThreadUtils, Utils}
-
+import com.qubole.sparklens.analyzer.{AppAnalyzer, ExecutorTimelineAnalyzer, ExecutorWallclockAnalyzer}
+import com.qubole.sparklens.common.{AggregateMetrics, AppContext, ApplicationInfo}
+import com.qubole.sparklens.timespan.{ExecutorTimeSpan, HostTimeSpan, JobTimeSpan, StageTimeSpan}
+//import org.apache.spark.sql.streaming.StreamingQueryListener
+//import org.apache.spark.sql.streaming.StreamingQueryListener.{QueryStartedEvent, QueryTerminatedEvent}
 /**
  * An agent that dynamically allocates and removes executors based on the workload.
  *
@@ -93,7 +98,8 @@ private[spark] class ExecutorAllocationManager(
   allocationManager =>
 
   import ExecutorAllocationManager._
-
+  val meowlist = new ListBuffer[AppAnalyzer]
+  meowlist += new ExecutorTimelineAnalyzer
   // Lower and upper bounds on the number of executors.
   private val minNumExecutors = conf.get(DYN_ALLOCATION_MIN_EXECUTORS)
   private val maxNumExecutors = conf.get(DYN_ALLOCATION_MAX_EXECUTORS)
@@ -161,6 +167,7 @@ private[spark] class ExecutorAllocationManager(
 
   // Listener for Spark events that impact the allocation policy
   val listener = new ExecutorAllocationListener
+  //val sqlistener = new SQLStream
 
   // Executor that handles the scheduling task.
   private val executor =
@@ -239,6 +246,9 @@ private[spark] class ExecutorAllocationManager(
    */
   def start(): Unit = {
     listenerBus.addToManagementQueue(listener)
+    //listenerBus.addToManagementQueue(sqlistener)
+
+    logInfo(s"meow lllllllexecutora")
 
     val scheduleTask = new Runnable() {
       override def run(): Unit = {
@@ -255,6 +265,8 @@ private[spark] class ExecutorAllocationManager(
     executor.scheduleWithFixedDelay(scheduleTask, 0, intervalMillis, TimeUnit.MILLISECONDS)
 
     client.requestTotalExecutors(numExecutorsTarget, localityAwareTasks, hostToLocalTaskCount)
+    println("meow lllllllexecutora client requestTotal EXecutor")
+
   }
 
   /**
@@ -284,6 +296,20 @@ private[spark] class ExecutorAllocationManager(
    * and pending tasks, rounded up.
    */
   private def maxNumExecutorsNeeded(): Int = {
+   // initialNumExecutors
+    //println("meow meow add exec:"+listener.supposenum)
+    if (listener.miss_dead_line==1)
+      {
+        val meee = executorIds.size+1
+        println("to meow be added total:"+meee)
+
+        //meee
+      }
+    else{
+      println("remain totaly:"+listener.executorMap.size)
+     // executorIds.size
+    }
+
     val numRunningOrPendingTasks = listener.totalPendingTasks + listener.totalRunningTasks
     math.ceil(numRunningOrPendingTasks * executorAllocationRatio /
               tasksPerExecutorForFullParallelism)
@@ -305,9 +331,12 @@ private[spark] class ExecutorAllocationManager(
    */
   private def schedule(): Unit = synchronized {
     val now = clock.getTimeMillis
-
-    updateAndSyncNumExecutorsTarget(now)
-
+  //meow
+    val adding = updateAndSyncNumExecutorsTarget(now)
+    if (adding!=0){
+      println("shcedule adding :"+adding)
+    }
+//meow
     val executorIdsToBeRemoved = ArrayBuffer[String]()
     removeTimes.retain { case (executorId, expireTime) =>
       val expired = now >= expireTime
@@ -335,40 +364,71 @@ private[spark] class ExecutorAllocationManager(
    * @return the delta in the target number of executors.
    */
   private def updateAndSyncNumExecutorsTarget(now: Long): Int = synchronized {
-    val maxNeeded = maxNumExecutorsNeeded
+//    val maxNeeded = maxNumExecutorsNeeded
+//    println("in pudateand sync numExecutorsTarget:"+numExecutorsTarget)
+//    if (initializing) {
+//      // Do not change our target while we are still initializing,
+//      // Otherwise the first job may have to ramp up unnecessarily
+//      0
+//    } else if (maxNeeded < numExecutorsTarget) {
+//      // The target number exceeds the number we actually need, so stop adding new
+//      // executors and inform the cluster manager to cancel the extra pending requests
+//      val oldNumExecutorsTarget = numExecutorsTarget
+//      numExecutorsTarget = math.max(maxNeeded, minNumExecutors)
+//      numExecutorsToAdd = 1
+//
+//      // If the new target has not changed, avoid sending a message to the cluster manager
+//      if (numExecutorsTarget < oldNumExecutorsTarget) {
+//        // We lower the target number of executors but don't actively kill any yet.  Killing is
+//        // controlled separately by an idle timeout.  It's still helpful to reduce the target number
+//        // in case an executor just happens to get lost (eg., bad hardware, or the cluster manager
+//        // preempts it) -- in that case, there is no point in trying to immediately  get a new
+//        // executor, since we wouldn't even use it yet.
+//        client.requestTotalExecutors(numExecutorsTarget, localityAwareTasks, hostToLocalTaskCount)
+//        logDebug(s"Lowering target number of executors to $numExecutorsTarget (previously " +
+//          s"$oldNumExecutorsTarget) because not all requested executors are actually needed")
+//      }
+//      numExecutorsTarget - oldNumExecutorsTarget
+//    } else if (addTime != NOT_SET && now >= addTime) {
+//      val delta = addExecutors(maxNeeded)
+//      logDebug(s"Starting timer to add more executors (to " +
+//        s"expire in $sustainedSchedulerBacklogTimeoutS seconds)")
+//      addTime = now + (sustainedSchedulerBacklogTimeoutS * 1000)
+//      delta
+//    } else {
+//      0
+//    }
 
-    if (initializing) {
-      // Do not change our target while we are still initializing,
-      // Otherwise the first job may have to ramp up unnecessarily
-      0
-    } else if (maxNeeded < numExecutorsTarget) {
-      // The target number exceeds the number we actually need, so stop adding new
-      // executors and inform the cluster manager to cancel the extra pending requests
-      val oldNumExecutorsTarget = numExecutorsTarget
-      numExecutorsTarget = math.max(maxNeeded, minNumExecutors)
-      numExecutorsToAdd = 1
-
-      // If the new target has not changed, avoid sending a message to the cluster manager
-      if (numExecutorsTarget < oldNumExecutorsTarget) {
-        // We lower the target number of executors but don't actively kill any yet.  Killing is
-        // controlled separately by an idle timeout.  It's still helpful to reduce the target number
-        // in case an executor just happens to get lost (eg., bad hardware, or the cluster manager
-        // preempts it) -- in that case, there is no point in trying to immediately  get a new
-        // executor, since we wouldn't even use it yet.
-        client.requestTotalExecutors(numExecutorsTarget, localityAwareTasks, hostToLocalTaskCount)
-        logDebug(s"Lowering target number of executors to $numExecutorsTarget (previously " +
-          s"$oldNumExecutorsTarget) because not all requested executors are actually needed")
-      }
-      numExecutorsTarget - oldNumExecutorsTarget
-    } else if (addTime != NOT_SET && now >= addTime) {
-      val delta = addExecutors(maxNeeded)
-      logDebug(s"Starting timer to add more executors (to " +
-        s"expire in $sustainedSchedulerBacklogTimeoutS seconds)")
-      addTime = now + (sustainedSchedulerBacklogTimeoutS * 1000)
-      delta
-    } else {
-      0
+    if (listener.miss_dead_line==1)
+    {
+      listener.miss_dead_line=0
+      val meee = executorIds.size+1
+      println("to meow be added total:"+meee)
+      val old = numExecutorsTarget
+      numExecutorsTarget+=1
+      numExecutorsTarget=Math.max( Math.min(numExecutorsTarget,maxNumExecutors)     , minNumExecutors)
+      if (numExecutorsTarget>old)
+        {
+        val addRequestAcknowledged = try {
+          testing ||
+            client.requestTotalExecutors(numExecutorsTarget, localityAwareTasks, hostToLocalTaskCount)
+        } catch {
+          case NonFatal(e) =>
+            // Use INFO level so the error it doesn't show up by default in shells. Errors here are more
+            // commonly caused by YARN AM restarts, which is a recoverable issue, and generate a lot of
+            // noisy output.
+            logInfo("Error reaching cluster manager.", e)
+            false
+        }
+        if (addRequestAcknowledged) {
+          println("addddded meow executor:"+numExecutorsTarget)
+        }
+        }
+      numExecutorsTarget
     }
+
+0
+
   }
 
   /**
@@ -442,6 +502,7 @@ private[spark] class ExecutorAllocationManager(
       numExecutorsTarget = oldNumExecutorsTarget
       0
     }
+//    maxNumExecutorsNeeded-executorIds.size
   }
 
   /**
@@ -635,6 +696,12 @@ private[spark] class ExecutorAllocationManager(
     removeTimes.remove(executorId)
   }
 
+
+//  private[spark] class SQLStream extends StreamingQueryListener {
+//    override def onQueryTerminated(event: QueryTerminatedEvent): Unit = {
+//      println("asdf")
+//    }
+//  }
   /**
    * A listener that notifies the given allocation manager of when to add and remove executors.
    *
@@ -660,7 +727,105 @@ private[spark] class ExecutorAllocationManager(
     // place the executors.
     private val stageIdToExecutorPlacementHints = new mutable.HashMap[Int, (Int, Map[String, Int])]
 
+    var supposenum = 1
+    var appInfo          = new ApplicationInfo()
+    var executorMap      = new mutable.HashMap[String, ExecutorTimeSpan]()
+    var hostMap          = new mutable.HashMap[String, HostTimeSpan]()
+    var jobMap           = new mutable.HashMap[Long, JobTimeSpan]
+    var stageMap         = new mutable.HashMap[Int, StageTimeSpan]
+    var stageIDToJobID   = new mutable.HashMap[Int, Long]
+    var failedStages     = new ListBuffer[String]
+    var appMetrics       = new AggregateMetrics()
+    var miss_dead_line = 0
+var batch_made_progress=0
+    override def onOtherEvent(event: SparkListenerEvent): Unit = {
+      println("onOthereventtttttttttttttttttt:"+event.toString.substring(0,Math.min(event.toString.length(),72)))
+      val check : String = event.toString.substring(0,Math.min(event.toString.length(),72))
+      check match {
+        case u if (u.endsWith("QueryProgressEvent") || u.contains("OutputOperationCompleted") )=>{
+
+
+          if (batch_made_progress==1){//prev_job_done_time!=qb.batch_done_time){
+            //if we miss cleaing up tasks at end of stage, clean them after end of job
+            stageMap.map(x => x._2).foreach( x => x.tempTaskTimes.clear())
+
+            println("meowMan ready to sparlens")
+            val appContext = new AppContext(appInfo,
+              appMetrics,
+              hostMap,
+              executorMap,
+              jobMap,
+              stageMap,
+              stageIDToJobID)
+
+
+            AppAnalyzer.startAnalyzers(appContext)
+
+            jobMap           = new mutable.HashMap[Long, JobTimeSpan]
+            stageMap         = new mutable.HashMap[Int, StageTimeSpan]
+            stageIDToJobID   = new mutable.HashMap[Int, Long]
+            failedStages     = new ListBuffer[String]
+            appMetrics       = new AggregateMetrics()
+
+            if (appInfo.endTime - appInfo.startTime < 15000)
+            {
+              println("no missed deadline:"+(appInfo.endTime - appInfo.startTime)/1000.0)
+              miss_dead_line = 0
+            }
+            else{
+              println("missed deadline:"+(appInfo.endTime - appInfo.startTime)/1000.0)
+              miss_dead_line = 1
+            }
+            //prev_job_done_time=qb.batch_done_time
+            appInfo.startTime=0
+            batch_made_progress=0
+          }
+
+        }
+        case _ => {}
+      }
+    }
+    override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {
+      println("meowMan7 onJobEnd" + jobEnd.time)
+      batch_made_progress=1
+      appInfo.endTime =jobEnd.time
+      val jobTimeSpan = jobMap(jobEnd.jobId)
+      jobTimeSpan.setEndTime(jobEnd.time)
+
+
+
+    }
+
+    override def onJobStart(jobStart: SparkListenerJobStart): Unit = {
+      println("meowMan3 on jobstart")
+      if (appInfo.startTime==0){
+        appInfo.startTime=jobStart.time
+      }
+
+      val jobTimeSpan = new JobTimeSpan(jobStart.jobId)
+      jobTimeSpan.setStartTime(jobStart.time)
+      jobMap(jobStart.jobId) = jobTimeSpan
+      jobStart.stageIds.foreach( stageID => {
+        stageIDToJobID(stageID) = jobStart.jobId
+      })
+
+    }
+
+
     override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
+      println("meowMan4 onStageSubmitted")
+
+      if (!stageMap.get(stageSubmitted.stageInfo.stageId).isDefined) {
+        val stageTimeSpan = new StageTimeSpan(stageSubmitted.stageInfo.stageId,
+          stageSubmitted.stageInfo.numTasks)
+        stageTimeSpan.setParentStageIDs(stageSubmitted.stageInfo.parentIds)
+        if (stageSubmitted.stageInfo.submissionTime.isDefined) {
+          stageTimeSpan.setStartTime(stageSubmitted.stageInfo.submissionTime.get)
+        }
+        stageMap(stageSubmitted.stageInfo.stageId) = stageTimeSpan
+      }
+      //println("meowMan4 onStageSubmitted")
+
       initializing = false
       val stageId = stageSubmitted.stageInfo.stageId
       val numTasks = stageSubmitted.stageInfo.numTasks
@@ -690,6 +855,32 @@ private[spark] class ExecutorAllocationManager(
     }
 
     override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
+      println("meowMan6 onStageCompleted")
+
+      val stageTimeSpan = stageMap(stageCompleted.stageInfo.stageId)
+      if (stageCompleted.stageInfo.completionTime.isDefined) {
+        stageTimeSpan.setEndTime(stageCompleted.stageInfo.completionTime.get)
+      }
+      if (stageCompleted.stageInfo.submissionTime.isDefined) {
+        stageTimeSpan.setStartTime(stageCompleted.stageInfo.submissionTime.get)
+      }
+
+      if (stageCompleted.stageInfo.failureReason.isDefined) {
+        //stage failed
+        val si = stageCompleted.stageInfo
+        failedStages += s""" Stage ${si.stageId} attempt ${si.attemptId} in job ${stageIDToJobID(si.stageId)} failed.
+                      Stage tasks: ${si.numTasks}
+                      """
+        stageTimeSpan.finalUpdate()
+      }else {
+        val jobID = stageIDToJobID(stageCompleted.stageInfo.stageId)
+        val jobTimeSpan = jobMap(jobID)
+        jobTimeSpan.addStage(stageTimeSpan)
+        stageTimeSpan.finalUpdate()
+      }
+      stageTimeSpan.tempTaskTimes.clear()
+      //println("meow6 onStageCompleted")
+
       val stageId = stageCompleted.stageInfo.stageId
       allocationManager.synchronized {
         stageIdToNumTasks -= stageId
@@ -743,8 +934,54 @@ private[spark] class ExecutorAllocationManager(
         allocationManager.onExecutorBusy(executorId)
       }
     }
+    override def onApplicationStart(applicationStart: SparkListenerApplicationStart): Unit = {
+      println("meowMan2 on appsatrt")
+      appInfo.applicationID = applicationStart.appId.getOrElse("meowNA")
+//      println("meowMan2 on appsatrt")
 
+    }
     override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit = {
+      //    println("meow5 onTaskEnd")
+
+      val taskMetrics = taskEnd.taskMetrics
+      val taskInfo    = taskEnd.taskInfo
+
+      if (taskMetrics == null) return
+
+      //update app metrics
+      appMetrics.update(taskMetrics, taskInfo)
+      val executorTimeSpan = executorMap.get(taskInfo.executorId)
+      if (executorTimeSpan.isDefined) {
+        //update the executor metrics
+        executorTimeSpan.get.updateAggregateTaskMetrics(taskMetrics, taskInfo)
+      }
+      val hostTimeSpan = hostMap.get(taskInfo.host)
+      if (hostTimeSpan.isDefined) {
+        //also update the host metrics
+        hostTimeSpan.get.updateAggregateTaskMetrics(taskMetrics, taskInfo)
+      }
+
+      val stageTimeSpan = stageMap.get(taskEnd.stageId)
+      if (stageTimeSpan.isDefined) {
+        //update stage metrics
+        stageTimeSpan.get.updateAggregateTaskMetrics(taskMetrics, taskInfo)
+        stageTimeSpan.get.updateTasks(taskInfo, taskMetrics)
+      }
+      val jobID = stageIDToJobID.get(taskEnd.stageId)
+      if (jobID.isDefined) {
+        val jobTimeSpan = jobMap.get(jobID.get)
+        if (jobTimeSpan.isDefined) {
+          //update job metrics
+          jobTimeSpan.get.updateAggregateTaskMetrics(taskMetrics, taskInfo)
+        }
+      }
+
+      if (taskEnd.taskInfo.failed) {
+        //println(s"\nTask Failed \n ${taskEnd.reason}"
+      }
+      //    println("meow5 onTaskEnd")
+
+
       val executorId = taskEnd.taskInfo.executorId
       val taskId = taskEnd.taskInfo.taskId
       val taskIndex = taskEnd.taskInfo.index
@@ -779,6 +1016,27 @@ private[spark] class ExecutorAllocationManager(
     }
 
     override def onExecutorAdded(executorAdded: SparkListenerExecutorAdded): Unit = {
+      println("meowMan1 onExecutorAdded")
+
+      val executorTimeSpan = executorMap.get(executorAdded.executorId)
+      if (!executorTimeSpan.isDefined) {
+        val timeSpan = new ExecutorTimeSpan(executorAdded.executorId,
+          executorAdded.executorInfo.executorHost,
+          executorAdded.executorInfo.totalCores)
+        timeSpan.setStartTime(executorAdded.time)
+        executorMap(executorAdded.executorId) = timeSpan
+        println("sparklens:"+executorMap.size)
+
+      }
+      val hostTimeSpan = hostMap.get(executorAdded.executorInfo.executorHost)
+      if (!hostTimeSpan.isDefined) {
+        val executorHostTimeSpan = new HostTimeSpan(executorAdded.executorInfo.executorHost)
+        executorHostTimeSpan.setStartTime(executorAdded.time)
+        hostMap(executorAdded.executorInfo.executorHost) = executorHostTimeSpan
+      }
+      //println("meowMan1 onExecutorAdded")
+
+
       val executorId = executorAdded.executorId
       if (executorId != SparkContext.DRIVER_IDENTIFIER) {
         // This guards against the race condition in which the `SparkListenerTaskStart`
@@ -786,12 +1044,27 @@ private[spark] class ExecutorAllocationManager(
         // possible because these events are posted in different threads. (see SPARK-4951)
         if (!allocationManager.executorIds.contains(executorId)) {
           allocationManager.onExecutorAdded(executorId)
+          println("ooficaical:"+executorIds.size)
         }
       }
+      println("meowMan1 onExecutorAdded end")
+
     }
 
     override def onExecutorRemoved(executorRemoved: SparkListenerExecutorRemoved): Unit = {
+      println("meowMan10 onExecutorRemoved")
+//
+      val executorTimeSpan = executorMap(executorRemoved.executorId)
+      executorTimeSpan.setEndTime(executorRemoved.time)
+
+     executorMap.remove(executorRemoved.executorId)
+      //println("meow10 onExecutorRemoved")
+
       allocationManager.onExecutorRemoved(executorRemoved.executorId)
+      println("ooficaical:"+executorIds.size)
+      println("meowMan10 onExecutorRemoved end")
+
+
     }
 
     override def onSpeculativeTaskSubmitted(speculativeTask: SparkListenerSpeculativeTaskSubmitted)
